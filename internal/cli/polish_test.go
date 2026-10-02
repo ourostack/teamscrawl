@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -232,7 +233,7 @@ func TestConversationsQueryHelpDocumentsRanking(t *testing.T) {
 func TestRelativeDBPath(t *testing.T) {
 	e := newEnv(t)
 	t.Chdir(t.TempDir())
-	e.db = "rel.db"
+	e.db = filepath.Join("data", "rel.db")
 	e.sync()
 	code, stdout, stderr := e.run("--max-age", "0", "messages", "--limit", "1")
 	if code != 0 || len(items(t, decode(t, stdout))) != 1 {

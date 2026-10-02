@@ -122,6 +122,7 @@ func TestFingerprintSkipsVanishedFile(t *testing.T) {
 	statEntry = func(e fs.DirEntry) (fs.FileInfo, error) {
 		if e.Name() == "000003.log" {
 			_ = os.Remove(victim) // Teams compacts the file between the listing and the stat
+			return nil, &fs.PathError{Op: "stat", Path: victim, Err: fs.ErrNotExist}
 		}
 		return e.Info()
 	}

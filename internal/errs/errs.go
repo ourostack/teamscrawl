@@ -2,7 +2,9 @@
 // from the spec's output contract table; the CLI prints them as {"error": {code, message, fix}}.
 package errs
 
-import "fmt"
+import (
+	"fmt"
+)
 
 // Exit statuses from the output contract.
 const (
@@ -106,11 +108,12 @@ func TeamsNotInstalled(root string) *Coded {
 		Fix:     "Install the new Microsoft Teams app and sign in once."}
 }
 
-// NoFullDiskAccess reports that macOS denied access to the Teams container.
+// NoFullDiskAccess reports that the OS denied access to the Teams data directory.
 func NoFullDiskAccess(path string, err error) *Coded {
+	msg, fix := noFullDiskAccessMessage(path)
 	return &Coded{Code: CodeNoFullDiskAccess, Exit: ExitEnvironment, cause: err,
-		Message: "macOS denied access to " + path,
-		Fix:     "Grant Full Disk Access to the app that runs teamscrawl in System Settings › Privacy & Security › Full Disk Access, then restart that app."}
+		Message: msg,
+		Fix:     fix}
 }
 
 // NoTeamsOrigin reports that no Teams IndexedDB origin exists under the root.

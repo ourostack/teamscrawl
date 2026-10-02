@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
@@ -67,15 +68,42 @@ func TestSetupRejectsANegativeMaxText(t *testing.T) {
 
 func TestSetupNeedsAHomeDirectoryWhenNoDatabaseIsGiven(t *testing.T) {
 	t.Setenv("HOME", "")
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+	t.Setenv("LOCALAPPDATA", "")
 	_, err := setupRuntime(t, Globals{}, false)
 	var c *errs.Coded
 	if !errors.As(err, &c) || c.Code != errs.CodeUsage || !strings.Contains(c.Message, "pass --db") {
 		t.Fatalf("err = %v", err)
 	}
-	t.Setenv("HOME", "/home/someone")
+	t.Setenv("HOME", filepath.Join(string(filepath.Separator), "home", "someone"))
+	t.Setenv("USERPROFILE", filepath.Join(string(filepath.Separator), "Users", "someone"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(string(filepath.Separator), "Users", "someone", "AppData", "Local"))
 	rt, err := setupRuntime(t, Globals{}, false)
-	if err != nil || rt.dbPath != filepath.Join("/home/someone", ".teamscrawl", "teamscrawl.db") {
+	want := filepath.Join(string(filepath.Separator), "home", "someone", ".teamscrawl", "teamscrawl.db")
+	if goruntime.GOOS == "windows" {
+		want = filepath.Join(string(filepath.Separator), "Users", "someone", "AppData", "Local", "teamscrawl", "teamscrawl.db")
+	}
+	if err != nil || rt.dbPath != want {
 		t.Fatalf("dbPath = %q, err = %v", rt.dbPath, err)
+	}
+}
+
+func TestRuntimeDefaultArchivePath(t *testing.T) {
+	t.Setenv("HOME", filepath.Join(string(filepath.Separator), "home", "someone"))
+	t.Setenv("USERPROFILE", filepath.Join(string(filepath.Separator), "Users", "someone"))
+	t.Setenv("LOCALAPPDATA", filepath.Join(string(filepath.Separator), "Users", "someone", "AppData", "Local"))
+	rt, err := setupRuntime(t, Globals{}, false)
+	if err != nil {
+		t.Fatalf("setupRuntime: %v", err)
+	}
+	want := filepath.Join(string(filepath.Separator), "home", "someone", ".teamscrawl", "teamscrawl.db")
+	if goruntime.GOOS == "windows" {
+		want = filepath.Join(string(filepath.Separator), "Users", "someone", "AppData", "Local", "teamscrawl", "teamscrawl.db")
+	}
+	if rt.dbPath != want {
+		t.Fatalf("dbPath = %q, want %q", rt.dbPath, want)
 	}
 }
 

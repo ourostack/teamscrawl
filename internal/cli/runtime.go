@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -71,11 +69,11 @@ func (rt *runtime) setup() error {
 	}
 	rt.dbPath = g.DB
 	if rt.dbPath == "" {
-		home, err := os.UserHomeDir()
+		var err error
+		rt.dbPath, err = defaultArchivePath()
 		if err != nil {
-			return errs.Usage("cannot find the home directory; pass --db")
+			return err
 		}
-		rt.dbPath = filepath.Join(home, ".teamscrawl", "teamscrawl.db")
 	}
 	rt.root = g.TeamsRoot
 	if g.Account != "" {

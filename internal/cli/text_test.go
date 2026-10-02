@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +57,13 @@ func checkGolden(t *testing.T, name, got string) {
 	}
 }
 
+func textGoldenName(name string) string {
+	if name == "doctor" && goruntime.GOOS == "windows" {
+		return name + ".windows"
+	}
+	return name
+}
+
 func textEnv(t *testing.T) *env {
 	t.Helper()
 	old := displayZone
@@ -103,7 +111,7 @@ func TestTextGoldens(t *testing.T) {
 			if color && !strings.Contains(out, "\x1b[") {
 				t.Errorf("%s: no color with CLICOLOR_FORCE=1", c.name)
 			}
-			checkGolden(t, c.name+"."+suffix, e.scrub(out))
+			checkGolden(t, textGoldenName(c.name)+"."+suffix, e.scrub(out))
 		}
 	}
 }

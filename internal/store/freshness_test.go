@@ -68,7 +68,7 @@ func TestFreshnessWithoutAccountsUsesAnyRun(t *testing.T) {
 
 func TestMigrateAddsAccountsJSONToOlderSyncRuns(t *testing.T) {
 	ctx := context.Background()
-	p := filepath.Join(t.TempDir(), "old.db")
+	p := filepath.Join(t.TempDir(), "data", "old.db")
 	s := must(Open(ctx, p))
 	must0(s.RecordRun(ctx, Run{StartedAt: at(0), FinishedAt: at(time.Minute), Source: "p|o", Fingerprint: "fp", Status: "ok"}))
 	must0(s.RecordRun(ctx, Run{StartedAt: at(time.Hour), FinishedAt: at(time.Hour + time.Minute), Source: "p|o", Fingerprint: "fp2", Status: "failed"}))
@@ -170,7 +170,7 @@ func TestCheckTeam(t *testing.T) {
 
 func TestReadOnlyFreshnessOnAnArchiveWithoutRunLevelRows(t *testing.T) {
 	ctx := context.Background()
-	p := filepath.Join(t.TempDir(), "old.db")
+	p := filepath.Join(t.TempDir(), "data", "old.db")
 	s := must(Open(ctx, p))
 	must0(s.ApplyAccount(ctx, acctA))
 	must0(s.RecordRun(ctx, Run{StartedAt: at(0), FinishedAt: at(time.Minute), Status: "ok", Accounts: []string{"*"}}))

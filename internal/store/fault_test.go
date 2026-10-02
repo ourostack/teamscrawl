@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -240,7 +242,14 @@ func (r *faultRows) Next(dest []driver.Value) error {
 func injectFaults(t *testing.T, s *Store) *injector {
 	t.Helper()
 	inj := &injector{seen: map[string]int{}}
-	db := sql.OpenDB(faultConnector{dsn: (&url.URL{Scheme: "file", Path: s.cs.Path()}).String() + "?_pragma=busy_timeout(5000)", inj: inj})
+	path := s.cs.Path()
+	if runtime.GOOS == "windows" {
+		path = filepath.ToSlash(path)
+		if filepath.VolumeName(path) != "" && !strings.HasPrefix(path, "/") {
+			path = "/" + path
+		}
+	}
+	db := sql.OpenDB(faultConnector{dsn: (&url.URL{Scheme: "file", Path: path}).String() + "?_pragma=busy_timeout(5000)", inj: inj})
 	db.SetMaxOpenConns(1)
 	t.Cleanup(func() { _ = db.Close() })
 	s.db = db

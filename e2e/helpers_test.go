@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"syscall"
@@ -66,7 +67,7 @@ func copyFixture(t *testing.T) string {
 	return dst
 }
 
-// env is one isolated machine: its own HOME, TMPDIR, Teams root and archive.
+// env is one isolated machine: its own home and temp roots, Teams root and archive.
 type env struct {
 	t    *testing.T
 	home string
@@ -79,7 +80,7 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	base := t.TempDir()
 	e := &env{t: t, home: filepath.Join(base, "home"), tmp: filepath.Join(base, "tmp"), root: copyFixture(t)}
-	for _, d := range []string{e.home, e.tmp} {
+	for _, d := range []string{e.home, e.tmp, filepath.Join(e.home, "AppData", "Local")} {
 		if err := os.MkdirAll(d, 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -91,19 +92,28 @@ func newEnv(t *testing.T) *env {
 // baseArgs points a command at this machine's fixture copy and archive.
 func (e *env) baseArgs() []string { return []string{"--teams-root", e.root, "--db", e.db} }
 
+func (e *env) localAppData() string { return filepath.Join(e.home, "AppData", "Local") }
+
+func (e *env) defaultArchivePath() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(e.localAppData(), "teamscrawl", "teamscrawl.db")
+	}
+	return filepath.Join(e.home, ".teamscrawl", "teamscrawl.db")
+}
+
 // environ is the process environment for a run: inherited, minus anything that would change
-// teamscrawl's behavior, plus the isolated HOME and TMPDIR. extra entries win.
+// teamscrawl's behavior, plus the isolated home and temp roots. extra entries win.
 func (e *env) environ(extra ...string) []string {
 	var out []string
 	for _, kv := range os.Environ() {
 		k, _, _ := strings.Cut(kv, "=")
 		switch {
-		case strings.HasPrefix(k, "TEAMSCRAWL_"), k == "NO_COLOR", k == "CLICOLOR", k == "CLICOLOR_FORCE", k == "HOME", k == "TMPDIR":
+		case strings.HasPrefix(k, "TEAMSCRAWL_"), k == "NO_COLOR", k == "CLICOLOR", k == "CLICOLOR_FORCE", k == "HOME", k == "TMPDIR", k == "TMP", k == "TEMP", k == "USERPROFILE", k == "LOCALAPPDATA":
 			continue
 		}
 		out = append(out, kv)
 	}
-	out = append(out, "HOME="+e.home, "TMPDIR="+e.tmp)
+	out = append(out, "HOME="+e.home, "TMPDIR="+e.tmp, "TMP="+e.tmp, "TEMP="+e.tmp, "USERPROFILE="+e.home, "LOCALAPPDATA="+e.localAppData())
 	return append(out, extra...)
 }
 
@@ -332,6 +342,20 @@ func skipIfRoot(t *testing.T) {
 	t.Helper()
 	if os.Geteuid() == 0 {
 		t.Skip("running as root: chmod 000 does not deny access, so this test cannot run")
+	}
+}
+
+func skipIfWindowsPermissionSimulation(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows does not provide the chmod-based unreadability this test assumes")
+	}
+}
+
+func skipIfWindowsSubprocessSignals(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows subprocess signal delivery is not reliable for this e2e scenario")
 	}
 }
 

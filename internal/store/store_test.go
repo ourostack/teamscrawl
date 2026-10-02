@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -20,11 +21,19 @@ func TestSchemaModes(t *testing.T) {
 		defer func() { _ = s.Close() }()
 		di := must(os.Stat(filepath.Dir(p)))
 		fi := must(os.Stat(p))
+		if runtime.GOOS == "windows" {
+			assertCurrentUserAndSystemOnly(t, filepath.Dir(p))
+			assertCurrentUserAndSystemOnly(t, p)
+			return
+		}
 		if di.Mode().Perm() != 0o700 || fi.Mode().Perm() != 0o600 {
 			t.Fatalf("dir %v file %v", di.Mode().Perm(), fi.Mode().Perm())
 		}
 	})
 	t.Run("existing custom parent is left alone", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows now rejects unsafe existing custom parents before SQLite open")
+		}
 		dir := t.TempDir()
 		if err := os.Chmod(dir, 0o755); err != nil { //nolint:gosec // G302: test needs a loose dir
 			t.Fatal(err)
@@ -44,6 +53,11 @@ func TestSchemaModes(t *testing.T) {
 		}
 		s := must(Open(ctx, filepath.Join(def, "teamscrawl.db")))
 		defer func() { _ = s.Close() }()
+		if runtime.GOOS == "windows" {
+			assertCurrentUserAndSystemOnly(t, def)
+			assertCurrentUserAndSystemOnly(t, filepath.Join(def, "teamscrawl.db"))
+			return
+		}
 		if m := must(os.Stat(def)).Mode().Perm(); m != 0o700 {
 			t.Fatalf("default dir is %v", m)
 		}
@@ -195,7 +209,7 @@ func TestOpenReadOnlyMissing(t *testing.T) {
 
 func TestReadOnlySQLRejectsWrites(t *testing.T) {
 	ctx := context.Background()
-	p := filepath.Join(t.TempDir(), "a.db")
+	p := filepath.Join(t.TempDir(), "data", "a.db")
 	w := must(Open(ctx, p))
 	must(w.ApplyMessages(ctx, []teamsdesktop.Message{msg(acctA, "c", "m1", "hi", base)}))
 	must0(w.Close())
@@ -215,7 +229,7 @@ func TestReadOnlySQLRejectsWrites(t *testing.T) {
 		t.Fatalf("data changed")
 	}
 	// A writable store refuses SQL too: the escape hatch is read-only by construction.
-	rw := must(Open(ctx, filepath.Join(t.TempDir(), "b.db")))
+	rw := must(Open(ctx, filepath.Join(t.TempDir(), "data", "b.db")))
 	defer func() { _ = rw.Close() }()
 	if _, _, _, err := rw.SQL(ctx, "select 1", 10); err == nil {
 		t.Fatal("SQL allowed on writable store")
@@ -224,7 +238,7 @@ func TestReadOnlySQLRejectsWrites(t *testing.T) {
 
 func TestReadOnlyWhileWriterActive(t *testing.T) {
 	ctx := context.Background()
-	p := filepath.Join(t.TempDir(), "a.db")
+	p := filepath.Join(t.TempDir(), "data", "a.db")
 	w := must(Open(ctx, p))
 	defer func() { _ = w.Close() }()
 	must(w.ApplyMessages(ctx, []teamsdesktop.Message{msg(acctA, "c", "m1", "hi", base)}))

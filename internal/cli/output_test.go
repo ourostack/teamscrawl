@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"reflect"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -178,6 +179,20 @@ func TestBodyOfAppendsTheDatabaseCause(t *testing.T) {
 	}
 	if got := bodyOf(errs.DBError(nil)).Message; strings.Contains(got, "disk full") || strings.HasSuffix(got, ": ") {
 		t.Fatalf("a db error without a cause keeps its plain message: %q", got)
+	}
+}
+
+func TestBodyOfUsesPlatformPermissionFix(t *testing.T) {
+	b := bodyOf(errs.NoFullDiskAccess(`C:\teams`, errors.New("denied")))
+	switch goruntime.GOOS {
+	case "windows":
+		if strings.Contains(b.Fix, "Full Disk Access") || !strings.Contains(b.Message, "Windows denied access") {
+			t.Fatalf("body = %+v", b)
+		}
+	default:
+		if !strings.Contains(b.Fix, "Full Disk Access") {
+			t.Fatalf("body = %+v", b)
+		}
 	}
 }
 

@@ -20,9 +20,7 @@ import (
 
 func skipIfRoot(t *testing.T) {
 	t.Helper()
-	if os.Geteuid() == 0 {
-		t.Skip("permission bits do not restrict root")
-	}
+	skipIfPermissionDeniedSimulationUnsupported(t)
 }
 
 // compactedSource is a source whose LevelDB has one table and a consistent MANIFEST.
@@ -42,7 +40,10 @@ func tableOf(t *testing.T, dir string) string {
 }
 
 func TestSnapshotTempDirFailure(t *testing.T) {
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+	missing := filepath.Join(t.TempDir(), "missing")
+	t.Setenv("TMPDIR", missing)
+	t.Setenv("TMP", missing)
+	t.Setenv("TEMP", missing)
 	snap, cleanup, err := Snapshot(context.Background(), compactedSource(t))
 	cleanup()
 	var coded *errs.Coded

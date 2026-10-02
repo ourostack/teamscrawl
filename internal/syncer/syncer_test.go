@@ -40,8 +40,15 @@ func newDB(t *testing.T) string { return filepath.Join(t.TempDir(), "data", "tea
 func isolateTmp(t *testing.T) string {
 	t.Helper()
 	tmp := t.TempDir()
-	t.Setenv("TMPDIR", tmp)
+	setTempDirEnv(t, tmp)
 	return tmp
+}
+
+func setTempDirEnv(t *testing.T, tmp string) {
+	t.Helper()
+	t.Setenv("TMPDIR", tmp)
+	t.Setenv("TMP", tmp)
+	t.Setenv("TEMP", tmp)
 }
 
 func snapshotDirs(t *testing.T, tmp string) []string {

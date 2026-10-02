@@ -208,6 +208,7 @@ func TestRealDifferential(t *testing.T) {
 	for _, snap := range snapshots {
 		o := openSnapshot(t, snap.dir)
 		cmd := exec.Command(node, "diff.mjs") //nolint:gosec // node comes from PATH; the script is this package's own
+		cmd.Dir = diffScriptDir(t)
 		stdin, _ := cmd.StdinPipe()
 		stdout, _ := cmd.StdoutPipe()
 		var stderr bytes.Buffer

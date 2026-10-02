@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -47,12 +48,19 @@ func TestSnapshotCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Mode().Perm() != 0o700 {
-		t.Fatalf("snapDir mode = %v", st.Mode().Perm())
-	}
-	for _, sub := range []string{"leveldb", "blob"} {
-		if st, err := os.Stat(filepath.Join(snap, sub)); err != nil || st.Mode().Perm() != 0o700 {
-			t.Fatalf("%s: %v %v", sub, st, err)
+	if runtime.GOOS == "windows" {
+		assertCurrentUserAndSystemOnly(t, snap)
+		for _, sub := range []string{"leveldb", "blob"} {
+			assertCurrentUserAndSystemOnly(t, filepath.Join(snap, sub))
+		}
+	} else {
+		if st.Mode().Perm() != 0o700 {
+			t.Fatalf("snapDir mode = %v", st.Mode().Perm())
+		}
+		for _, sub := range []string{"leveldb", "blob"} {
+			if st, err := os.Stat(filepath.Join(snap, sub)); err != nil || st.Mode().Perm() != 0o700 {
+				t.Fatalf("%s: %v %v", sub, st, err)
+			}
 		}
 	}
 	cleanup()
@@ -66,7 +74,10 @@ func TestSnapshotCleanup(t *testing.T) {
 // directories is not disturbed by other packages' tests running at the same time.
 func privateTempDir(t *testing.T) {
 	t.Helper()
-	t.Setenv("TMPDIR", t.TempDir())
+	dir := t.TempDir()
+	t.Setenv("TMPDIR", dir)
+	t.Setenv("TMP", dir)
+	t.Setenv("TEMP", dir)
 }
 
 func TestSnapshotRetryThenFail(t *testing.T) {

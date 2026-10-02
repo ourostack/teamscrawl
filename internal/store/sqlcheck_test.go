@@ -55,7 +55,7 @@ func TestCheckSQL(t *testing.T) {
 
 func TestSQLStreamsAndStopsAtTheLimit(t *testing.T) {
 	ctx := context.Background()
-	p := filepath.Join(t.TempDir(), "a.db")
+	p := filepath.Join(t.TempDir(), "data", "a.db")
 	w := must(Open(ctx, p))
 	must(w.ApplyMessages(ctx, []teamsdesktop.Message{
 		msg(acctA, "c", "m1", "has an attach word", base),
@@ -103,7 +103,7 @@ func TestSQLStreamsAndStopsAtTheLimit(t *testing.T) {
 	if _, _, _, err := ro.SQL(cctx, "select 1", 1); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancelled: %v", err)
 	}
-	rw := must(Open(ctx, filepath.Join(t.TempDir(), "b.db")))
+	rw := must(Open(ctx, filepath.Join(t.TempDir(), "data", "b.db")))
 	defer func() { _ = rw.Close() }()
 	if _, _, _, err := rw.SQL(ctx, "select 1", 1); err == nil {
 		t.Fatal("SQL allowed on writable store")

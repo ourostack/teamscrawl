@@ -174,6 +174,8 @@ func (c cancelWriter) Write(p []byte) (int, error) { c(); return len(p), nil }
 func TestDefaultRootWhenNoneGiven(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("LOCALAPPDATA", filepath.Join(home, "AppData", "Local"))
 	_, _, err := Run(context.Background(), Options{DBPath: newDB(t)})
 	codedErr(t, err, errs.CodeTeamsNotInstalled)
 	if !strings.Contains(err.Error(), home) {
@@ -210,7 +212,7 @@ func TestUnreadableSourceFailsFingerprint(t *testing.T) {
 }
 
 func TestSnapshotFailure(t *testing.T) {
-	t.Setenv("TMPDIR", filepath.Join(t.TempDir(), "missing"))
+	setTempDirEnv(t, filepath.Join(t.TempDir(), "missing"))
 	db := newDB(t)
 	_, _, err := Run(context.Background(), Options{Root: fixtureRoot, DBPath: db})
 	codedErr(t, err, errs.CodeInternal)

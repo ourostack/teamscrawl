@@ -1,0 +1,27 @@
+[38;2;180;182;228m ▄▄[0m                                                       [38;2;98;100;167m▄▄[0m
+[38;2;180;182;228m ██[0m                                                       [38;2;98;100;167m██[0m
+[38;2;180;182;228m▀██▀[0m [38;2;98;100;167m▄███▄[0m [38;2;98;100;167m ▀▀█▄[0m [38;2;98;100;167m██▀█▀██[0m [38;2;98;100;167m▄█▀▀▀[0m [38;2;98;100;167m▄████[0m  [38;2;98;100;167m████▄[0m [38;2;98;100;167m ▀▀█▄[0m [38;2;98;100;167m██   ██[0m [38;2;98;100;167m██[0m
+[38;2;180;182;228m ██[0m  [38;2;98;100;167m██▀▀▀[0m [38;2;98;100;167m▄█▀██[0m [38;2;98;100;167m██ █ ██[0m [38;2;98;100;167m▀███▄[0m [38;2;98;100;167m██[0m     [38;2;98;100;167m██ ▀▀[0m [38;2;98;100;167m▄█▀██[0m [38;2;98;100;167m██ █ ██[0m [38;2;98;100;167m██[0m
+[38;2;180;182;228m ▀█▄[0m [38;2;98;100;167m▀████[0m [38;2;98;100;167m▀█▄██[0m [38;2;98;100;167m██   ██[0m [38;2;98;100;167m▄▄▄█▀[0m [38;2;98;100;167m▀████[0m  [38;2;98;100;167m██[0m    [38;2;98;100;167m▀█▄██[0m [38;2;98;100;167m ██▀██[0m  [38;2;98;100;167m██[0m
+[2mlocal-first Teams mirror for SQLite[0m[2m  |  [0m[36mdoctor[0m
+
+[1m[36mDOCTOR[0m
+[2m======[0m
+
+[36mReady checks[0m
+[2m------------[0m
+  [32m●[0m [2mteams_installed  [0m  Teams data found at <teams-root>
+  [32m●[0m [2mfull_disk_access [0m  not applicable on Windows
+  [32m●[0m [2mteams_origin     [0m  1 Teams origin(s) found
+  [32m●[0m [2mdatabase_writable[0m  <db> is writable
+  [32m●[0m [2mschema_version   [0m  schema v2
+  [32m●[0m [2mfts              [0m  full-text indexes present
+  [32m●[0m [2marchive_newer    [0m  the archive was written by this or an older teamscrawl (derivation version 2)
+  [32m●[0m [2mlast_sync_status [0m  the last sync was ok
+  [32m●[0m [2mlast_sync_age    [0m  last successful sync <age> ago
+
+[36mSnapshot[0m
+[2m--------[0m
+  [2maccounts=[0m2[2m  |  [0m[2mconversations=[0m14[2m  |  [0m[2mmessages=[0m110[2m  |  [0m[2mpeople=[0m10[2m  |  [0m[2mactivity=[0m22
+  [2mlast sync  [0m  <stamp>
+  [2marchive age[0m  <age>

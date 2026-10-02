@@ -567,19 +567,20 @@ func TestAmbiguousTeamListIsCapped(t *testing.T) {
 func TestOpenReadOnlyAcceptsRelativePath(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
-	s, err := Open(ctx, filepath.Join(dir, "rel.db"))
+	rel := filepath.Join("data", "rel.db")
+	s, err := Open(ctx, filepath.Join(dir, rel))
 	if err != nil {
 		t.Fatal(err)
 	}
 	must(s.ApplyMessages(ctx, []teamsdesktop.Message{msg(acctA, "c", "m1", "hello", base)}))
 	_ = s.Close()
 	t.Chdir(dir)
-	rw, err := Open(ctx, "rel.db") // a relative path opens the writer too
+	rw, err := Open(ctx, rel) // a relative path opens the writer too
 	if err != nil {
 		t.Fatalf("relative path, writer: %v", err)
 	}
 	_ = rw.Close()
-	ro, err := OpenReadOnly(ctx, "rel.db")
+	ro, err := OpenReadOnly(ctx, rel)
 	if err != nil {
 		t.Fatalf("relative path: %v", err)
 	}

@@ -15,6 +15,11 @@ import (
 	"github.com/ourostack/teamscrawl/internal/errs"
 )
 
+var (
+	statDir        = os.Stat
+	readDirEntries = os.ReadDir
+)
+
 // Source is one Teams IndexedDB origin inside one WebView2 profile.
 type Source struct {
 	Profile    string // profile directory name under the EBWebView root
@@ -26,16 +31,6 @@ type Source struct {
 // Key identifies the source in the archive: "<profile>|<origin>".
 func (s Source) Key() string { return s.Profile + "|" + s.Origin }
 
-// DefaultRoot is the EBWebView directory of the new Teams app in its macOS container.
-func DefaultRoot() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = "~"
-	}
-	return filepath.Join(home, "Library", "Containers", "com.microsoft.teams2", "Data", "Library",
-		"Application Support", "Microsoft", "MSTeams", "EBWebView")
-}
-
 var teamsOrigin = regexp.MustCompile(`^https_teams\.(microsoft\.com|cloud\.microsoft)_\d+$`)
 
 const (
@@ -45,7 +40,7 @@ const (
 
 // Discover lists the Teams origins under root (an EBWebView directory). otherOrigins names the
 // non-Teams IndexedDB origins it saw and ignored. Errors are *errs.Coded: teams_not_installed
-// when root is missing, no_full_disk_access when macOS denies access, no_teams_origin when no
+// when root is missing, no_full_disk_access when the OS denies access, no_teams_origin when no
 // profile holds a Teams origin.
 func Discover(root string) (sources []Source, otherOrigins []string, err error) {
 	profiles, err := readDir(root, root)
@@ -97,7 +92,13 @@ func Discover(root string) (sources []Source, otherOrigins []string, err error) 
 // readDir lists dir, mapping failures to coded errors. A missing root is teams_not_installed;
 // any other missing directory is reported the same way so callers can skip it.
 func readDir(root, dir string) ([]fs.DirEntry, error) {
-	ents, err := os.ReadDir(dir)
+	info, err := statDir(dir)
+	if err == nil && !info.IsDir() {
+		// Windows maps os.ReadDir(file) to fs.ErrNotExist, which would incorrectly turn a file root
+		// into teams_not_installed without this explicit directory check.
+		return nil, errs.Internal(&fs.PathError{Op: "readdir", Path: dir, Err: fs.ErrInvalid})
+	}
+	ents, err := readDirEntries(dir)
 	if err == nil {
 		return ents, nil
 	}

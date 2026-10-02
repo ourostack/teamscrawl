@@ -3,6 +3,7 @@ package errs
 import (
 	"errors"
 	"fmt"
+	goruntime "runtime"
 	"strings"
 	"testing"
 )
@@ -44,8 +45,16 @@ func TestConstructorsMatchOutputContract(t *testing.T) {
 	if !errors.As(fmt.Errorf("wrap: %w", DBError(cause)), &coded) || !errors.Is(coded, cause) {
 		t.Fatal("Coded must be matchable by errors.As and unwrap to its cause")
 	}
-	if fda := NoFullDiskAccess("/r", cause); !containsAll(fda.Fix, "System Settings", "Privacy & Security", "Full Disk Access") {
-		t.Fatalf("fix = %q", fda.Fix)
+	fda := NoFullDiskAccess("/r", cause)
+	switch goruntime.GOOS {
+	case "windows":
+		if containsAll(fda.Fix, "System Settings", "Privacy & Security", "Full Disk Access") {
+			t.Fatalf("fix = %q", fda.Fix)
+		}
+	default:
+		if !containsAll(fda.Fix, "System Settings", "Privacy & Security", "Full Disk Access") {
+			t.Fatalf("fix = %q", fda.Fix)
+		}
 	}
 }
 

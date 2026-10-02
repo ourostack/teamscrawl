@@ -14,11 +14,11 @@
 // Wire version 16 only widens ArrayBuffer length fields, so, as slacrawl's redux.go does, a
 // version 16 payload is relabelled 15 in a copy before Node reads it.
 import v8 from 'node:v8';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const { canonical } = await import(path.join(here, '..', 'scripts', 'v8vectors', 'canon.mjs'));
+const { canonical } = await import(pathToFileURL(path.join(here, '..', 'scripts', 'v8vectors', 'canon.mjs')).href);
 
 function check(payload) {
   const buf = Buffer.from(payload); // a copy: the relabel below must not touch the input

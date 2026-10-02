@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/ourostack/teamscrawl/internal/teamsdesktop"
@@ -96,7 +97,7 @@ func TestSchemaRenameMigration(t *testing.T) {
 	if SchemaVersion < 2 {
 		t.Fatalf("the column rename needs a schema bump, got %d", SchemaVersion)
 	}
-	path := t.TempDir() + "/old.db"
+	path := filepath.Join(t.TempDir(), "data", "old.db")
 	s, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)

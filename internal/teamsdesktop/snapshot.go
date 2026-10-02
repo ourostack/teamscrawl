@@ -41,7 +41,7 @@ var (
 // also when ctx is cancelled.
 func Snapshot(ctx context.Context, s Source) (snapDir string, cleanup func(), err error) {
 	noop := func() {}
-	dir, err := os.MkdirTemp("", snapshotPrefix)
+	dir, err := makeSnapshotRoot()
 	if err != nil {
 		return "", noop, errs.Internal(err)
 	}
@@ -77,7 +77,7 @@ func copyOnce(ctx context.Context, s Source, dir string, attempt int) (retry boo
 		if err := os.RemoveAll(d); err != nil {
 			return false, errs.Internal(err)
 		}
-		if err := os.MkdirAll(d, 0o700); err != nil {
+		if err := makeSnapshotDir(d); err != nil {
 			return false, errs.Internal(err)
 		}
 	}
@@ -199,7 +199,7 @@ func copyTree(ctx context.Context, src, dst string) error {
 		}
 		target := filepath.Join(dst, rel)
 		if e.IsDir() {
-			return os.MkdirAll(target, 0o700)
+			return makeSnapshotDir(target)
 		}
 		if !e.Type().IsRegular() {
 			return nil
@@ -232,7 +232,7 @@ func copyFile(ctx context.Context, src, dst string) error {
 	if !st.Mode().IsRegular() {
 		return nil
 	}
-	out, err := os.OpenFile(dst, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600) //nolint:gosec // dst is inside our private snapshot directory
+	out, err := openSnapshotFile(dst)
 	if err != nil {
 		return err
 	}

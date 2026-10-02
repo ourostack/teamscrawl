@@ -6,10 +6,14 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 
 	"github.com/openclaw/crawlkit/output"
+
+	"github.com/ourostack/teamscrawl/internal/errs"
+	"github.com/ourostack/teamscrawl/internal/teamsdesktop"
 )
 
 func checks(t *testing.T, m map[string]any) map[string]map[string]any {
@@ -139,6 +143,8 @@ func TestDoctorNamesIgnoredNonTeamsOrigins(t *testing.T) {
 
 func TestDoctorFallsBackToTheDefaultRoot(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
+	t.Setenv("USERPROFILE", t.TempDir())
+	t.Setenv("LOCALAPPDATA", filepath.Join(t.TempDir(), "AppData", "Local"))
 	t.Setenv("TEAMSCRAWL_DB", filepath.Join(t.TempDir(), "a.db"))
 	var out, errb bytes.Buffer
 	code := Main([]string{"doctor", "--json"}, &out, &errb)
@@ -146,8 +152,58 @@ func TestDoctorFallsBackToTheDefaultRoot(t *testing.T) {
 		t.Fatalf("exit %d: %s", code, errb.String())
 	}
 	d := checks(t, decode(t, out.String()))["teams_installed"]["detail"].(string)
-	if !strings.Contains(d, "Library/Containers/com.microsoft.teams2") {
-		t.Fatalf("detail = %q does not name the default root", d)
+	switch goruntime.GOOS {
+	case "windows":
+		if !strings.Contains(d, `MSTeams_8wekyb3d8bbwe`) {
+			t.Fatalf("detail = %q does not name the Windows default root", d)
+		}
+	default:
+		if !strings.Contains(d, "Library/Containers/com.microsoft.teams2") {
+			t.Fatalf("detail = %q does not name the default root", d)
+		}
+	}
+}
+
+func TestDoctorFullDiskAccessCheckWindows(t *testing.T) {
+	if goruntime.GOOS != "windows" {
+		t.Skip("Windows-specific doctor wording")
+	}
+	e := newEnv(t)
+	code, cs, _ := doctorChecksFor(t, e)
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	c := cs["full_disk_access"]
+	if c["ok"] != true || c["detail"] != "not applicable on Windows" {
+		t.Fatalf("full_disk_access = %v", c)
+	}
+	if fix, _ := c["fix"].(string); fix != "" {
+		t.Fatalf("full_disk_access fix = %q, want empty", fix)
+	}
+}
+
+func TestDoctorRoutesWindowsPermissionDeniedToTeamsOrigin(t *testing.T) {
+	if goruntime.GOOS != "windows" {
+		t.Skip("Windows-specific doctor wording")
+	}
+	old := discover
+	discover = func(string) ([]teamsdesktop.Source, []string, error) {
+		return nil, nil, errs.NoFullDiskAccess(`C:\locked`, errors.New("access denied"))
+	}
+	t.Cleanup(func() { discover = old })
+	e := newEnv(t)
+	code, cs, _ := doctorChecksFor(t, e)
+	if code != 3 {
+		t.Fatalf("exit %d", code)
+	}
+	fda := cs["full_disk_access"]
+	if fda["ok"] != true || fda["detail"] != "not applicable on Windows" {
+		t.Fatalf("full_disk_access = %v", fda)
+	}
+	c := cs["teams_origin"]
+	fix := c["fix"].(string)
+	if c["ok"] != false || !strings.Contains(c["detail"].(string), `Windows denied access to C:\locked`) || strings.Contains(fix, "Full Disk Access") || !strings.Contains(fix, "Windows account can read") || !strings.Contains(fix, "--teams-root") {
+		t.Fatalf("teams_origin = %v", c)
 	}
 }
 

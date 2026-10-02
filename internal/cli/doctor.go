@@ -61,7 +61,7 @@ func (rt *runtime) doctorChecks() []check {
 	if root == "" {
 		root = teamsdesktop.DefaultRoot()
 	}
-	sources, other, derr := teamsdesktop.Discover(root)
+	sources, other, derr := discover(root)
 	var coded *errs.Coded
 	errors.As(derr, &coded)
 	code := ""
@@ -78,27 +78,9 @@ func (rt *runtime) doctorChecks() []check {
 		cs = append(cs, check{Name: "teams_installed", OK: true, Detail: "Teams data found at " + root})
 	}
 	// full_disk_access
-	switch code {
-	case errs.CodeTeamsNotInstalled:
-		cs = append(cs, check{Name: "full_disk_access", Detail: "not checked: Teams is not installed", Fix: "Fix teams_installed first."})
-	case errs.CodeNoFullDiskAccess:
-		cs = append(cs, check{Name: "full_disk_access", Detail: coded.Message, Fix: fdaFix()})
-	default:
-		cs = append(cs, check{Name: "full_disk_access", OK: true, Detail: "the Teams container is readable"})
-	}
+	cs = append(cs, fullDiskAccessDoctorCheck(code, coded))
 	// teams_origin
-	switch {
-	case code == errs.CodeNoTeamsOrigin:
-		cs = append(cs, check{Name: "teams_origin", Detail: coded.Message, Fix: coded.Fix})
-	case derr != nil:
-		cs = append(cs, check{Name: "teams_origin", Detail: "not checked: the Teams data is not readable", Fix: "Fix the checks above first."})
-	default:
-		d := fmt.Sprintf("%d Teams origin(s) found", len(sources))
-		if len(other) > 0 {
-			d += "; ignoring non-Teams origins: " + strings.Join(other, ", ")
-		}
-		cs = append(cs, check{Name: "teams_origin", OK: true, Detail: d})
-	}
+	cs = append(cs, teamsOriginDoctorCheck(sources, other, derr, code, coded))
 	return append(cs, rt.archiveChecks()...)
 }
 

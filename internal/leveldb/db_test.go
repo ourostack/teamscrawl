@@ -280,7 +280,13 @@ func TestPermissionErrorIsNotMissingFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(tabs[0], 0o600) })
-	_, err := Load(dir)
+	probe, err := os.Open(tabs[0])
+	if err == nil {
+		_ = probe.Close()
+		t.Skipf("%s permissions are not enforced", tabs[0])
+	}
+	requirePermissionSimulation(t, err, tabs[0])
+	_, err = Load(dir)
 	var mf *MissingFileError
 	if err == nil || errors.As(err, &mf) || !errors.Is(err, fs.ErrPermission) {
 		t.Fatalf("err = %v, want a permission error that is not MissingFileError", err)
@@ -297,6 +303,8 @@ func TestTableNameStatPermission(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) }) //nolint:gosec // restoring a test temp dir so cleanup can remove it
+	_, probeErr := os.Stat(filepath.Join(dir, "000007.ldb"))
+	requirePermissionSimulation(t, probeErr, dir)
 	_, err := tableName(dir, 7)
 	var mf *MissingFileError
 	if err == nil || errors.As(err, &mf) {

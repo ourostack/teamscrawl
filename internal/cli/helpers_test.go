@@ -25,7 +25,10 @@ type env struct {
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
-	t.Setenv("TMPDIR", t.TempDir())
+	tmp := t.TempDir()
+	t.Setenv("TMPDIR", tmp)
+	t.Setenv("TMP", tmp)
+	t.Setenv("TEMP", tmp)
 	t.Setenv("TEAMSCRAWL_MAX_AGE", "")
 	t.Setenv("TEAMSCRAWL_DB", "")
 	t.Setenv("TEAMSCRAWL_TEAMS_ROOT", "")
@@ -97,8 +100,11 @@ func errorOf(t *testing.T, stderr string) map[string]any {
 
 func skipIfRoot(t *testing.T) {
 	t.Helper()
-	if os.Geteuid() == 0 {
-		t.Skip("chmod 000 does not restrict root")
+	if !supportsPermissionDeniedSimulation() {
+		t.Skip("permission-denied chmod test is not supported on this platform")
+	}
+	if runningAsPrivilegedUser() {
+		t.Skip("permission bits do not restrict the current user")
 	}
 }
 

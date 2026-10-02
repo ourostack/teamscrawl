@@ -47,9 +47,13 @@ func TestDiffScriptAgreesWithGo(t *testing.T) {
 		in.Write(p)
 	}
 	cmd := exec.Command(node, "diff.mjs") //nolint:gosec // node comes from PATH; the script is this package's own
+	cmd.Dir = diffScriptDir(t)
 	cmd.Stdin = &in
 	out, err := cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			t.Fatalf("%v: %s", err, exitErr.Stderr)
+		}
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimSuffix(string(out), "\n"), "\n")

@@ -8,6 +8,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	goruntime "runtime"
 	"strings"
 	"testing"
 	"time"
@@ -20,8 +21,20 @@ import (
 
 func TestDefaultRootWithoutHome(t *testing.T) {
 	t.Setenv("HOME", "")
-	if r := DefaultRoot(); !strings.HasPrefix(r, "~") {
-		t.Fatalf("DefaultRoot without a home = %q, want it to start with ~", r)
+	t.Setenv("USERPROFILE", "")
+	t.Setenv("HOMEDRIVE", "")
+	t.Setenv("HOMEPATH", "")
+	t.Setenv("LOCALAPPDATA", "")
+	r := DefaultRoot()
+	switch goruntime.GOOS {
+	case "windows":
+		if !strings.HasPrefix(r, filepath.Join("~", "AppData", "Local")) {
+			t.Fatalf("DefaultRoot without a home = %q", r)
+		}
+	default:
+		if !strings.HasPrefix(r, "~") {
+			t.Fatalf("DefaultRoot without a home = %q, want it to start with ~", r)
+		}
 	}
 }
 
@@ -49,8 +62,8 @@ func TestDiscoverRootIsAFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, err := Discover(f)
-	if c := codeOf(t, err); c.Code == errs.CodeTeamsNotInstalled || c.Code == errs.CodeNoFullDiskAccess {
-		t.Fatalf("a root that is a file is an internal error, got %v", err)
+	if c := codeOf(t, err); c.Code != errs.CodeInternal {
+		t.Fatalf("a root that is a file must stay an internal error even on Windows readdir(file), got %v", err)
 	}
 }
 

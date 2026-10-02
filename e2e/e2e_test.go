@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"syscall"
@@ -22,6 +23,13 @@ import (
 )
 
 var binary string
+
+func testBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "teamscrawl.exe"
+	}
+	return "teamscrawl"
+}
 
 func TestMain(m *testing.M) {
 	os.Exit(run(m))
@@ -35,7 +43,7 @@ func run(m *testing.M) int {
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	binary = filepath.Join(dir, "teamscrawl")
+	binary = filepath.Join(dir, testBinaryName())
 	build := exec.Command( //nolint:gosec // fixed arguments; binary path is a temp dir we created
 		"go", "build", "-ldflags", "-X github.com/ourostack/teamscrawl/internal/cli.version=e2e", "-o", binary, "../cmd/teamscrawl")
 	build.Env = append(os.Environ(), "GOWORK=off", "CGO_ENABLED=0")
@@ -69,6 +77,7 @@ func TestVersion(t *testing.T) {
 
 // SIGTERM while watch is mid-sync (held after the snapshot) exits 0 and removes the snapshot.
 func TestWatchSIGTERM(t *testing.T) {
+	skipIfWindowsSubprocessSignals(t)
 	tmp := t.TempDir()
 	root, err := filepath.Abs("../testdata/teams-fixture/EBWebView")
 	if err != nil {
@@ -76,7 +85,7 @@ func TestWatchSIGTERM(t *testing.T) {
 	}
 	var stdout, stderr bytes.Buffer
 	cmd := exec.Command(binary, "watch", "--every", "1h", "--db", filepath.Join(tmp, "a.db"), "--teams-root", root, "--json") //nolint:gosec // G204: binary is the one this test built
-	cmd.Env = append(os.Environ(), "TMPDIR="+tmp, "TEAMSCRAWL_TEST_PAUSE_AFTER_SNAPSHOT=30s")
+	cmd.Env = append(os.Environ(), "TMPDIR="+tmp, "TMP="+tmp, "TEMP="+tmp, "TEAMSCRAWL_TEST_PAUSE_AFTER_SNAPSHOT=30s")
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
@@ -168,7 +177,7 @@ func TestE2EFreshMachine(t *testing.T) {
 	}
 
 	st := ok(t, e.run(append([]string{"status", "--json"}, root...)...))
-	if want := filepath.Join(e.home, ".teamscrawl", "teamscrawl.db"); st["archive_path"] != want {
+	if want := e.defaultArchivePath(); st["archive_path"] != want {
 		t.Fatalf("archive_path = %v, want %s", st["archive_path"], want)
 	}
 	accts, _ := st["accounts"].([]any)
@@ -327,6 +336,7 @@ func TestE2ETwoAccounts(t *testing.T) {
 func TestE2EErrors(t *testing.T) {
 	t.Run("no full disk access", func(t *testing.T) {
 		skipIfRoot(t)
+		skipIfWindowsPermissionSimulation(t)
 		e := newEnv(t)
 		if err := os.Chmod(e.root, 0o000); err != nil {
 			t.Fatal(err)
@@ -407,7 +417,14 @@ func TestE2EErrors(t *testing.T) {
 		if !strings.Contains(errBody["message"].(string), ".lock") {
 			t.Fatalf("locked message = %v", errBody["message"])
 		}
-		holder.signal(syscall.SIGINT)
+		if runtime.GOOS == "windows" {
+			if err := holder.cmd.Process.Kill(); err != nil {
+				t.Fatal(err)
+			}
+			<-holder.done
+		} else {
+			holder.signal(syscall.SIGINT)
+		}
 	})
 
 	t.Run("cache cannot be copied consistently", func(t *testing.T) {
@@ -438,6 +455,21 @@ func TestE2EErrors(t *testing.T) {
 func TestE2EDBModes(t *testing.T) {
 	e := newEnv(t)
 	e.sync()
+	if runtime.GOOS == "windows" {
+		for _, path := range []string{filepath.Dir(e.db), e.db} {
+			if _, err := os.Stat(path); err != nil {
+				t.Fatal(err)
+			}
+		}
+		d := newEnv(t)
+		mustExit(t, d.run("sync", "--teams-root", d.root), 0)
+		for _, path := range []string{filepath.Dir(d.defaultArchivePath()), d.defaultArchivePath()} {
+			if _, err := os.Stat(path); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return
+	}
 	dir := filepath.Dir(e.db)
 	for path, want := range map[string]os.FileMode{dir: 0o700, e.db: 0o600} {
 		fi, err := os.Stat(path)
@@ -502,6 +534,7 @@ func TestE2ENoSnapshotLeft(t *testing.T) {
 		}
 	})
 	t.Run("after SIGINT mid-sync", func(t *testing.T) {
+		skipIfWindowsSubprocessSignals(t)
 		e := newEnv(t)
 		// A 10 s pause is far longer than the test needs: it signals as soon as the marker shows
 		// that the snapshot is complete and the process is waiting.
@@ -986,6 +1019,7 @@ func TestE2EOutputContract(t *testing.T) {
 // TestE2EWatch runs the real watch loop: the baseline sync prints nothing, then a change in the
 // (copied) cache produces a message line.
 func TestE2EWatch(t *testing.T) {
+	skipIfWindowsSubprocessSignals(t)
 	e := newEnv(t)
 	s := e.start(nil, append([]string{"watch", "--every", "1s"}, e.baseArgs()...)...)
 	count := func(q string) int { return archiveCount(t, e.db, q) }
@@ -1216,6 +1250,7 @@ func twoProfiles(t *testing.T, e *env) (manifest string) {
 // the archive does not count as fresh: the next read says so and tries again.
 func TestE2EPartialSync(t *testing.T) {
 	skipIfRoot(t)
+	skipIfWindowsPermissionSimulation(t)
 	e := newEnv(t)
 	manifest := twoProfiles(t, e)
 	if err := os.Chmod(manifest, 0o000); err != nil {
@@ -1298,6 +1333,7 @@ func TestE2EWhoamiNestedAge(t *testing.T) {
 
 // A second SIGINT force-quits at once (exit 130) even when the graceful stop is stuck.
 func TestE2EDoubleSIGINT(t *testing.T) {
+	skipIfWindowsSubprocessSignals(t)
 	e := newEnv(t)
 	// The stubborn pause ignores cancellation, so the graceful stop cannot finish within the test.
 	s := e.start([]string{"TEAMSCRAWL_TEST_PAUSE_AFTER_SNAPSHOT=60s", "TEAMSCRAWL_TEST_PAUSE_IGNORES_CANCEL=1"}, append([]string{"sync"}, e.baseArgs()...)...)
