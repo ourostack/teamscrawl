@@ -279,21 +279,26 @@ func (b *Browser) connect(ctx context.Context) (*client, error) {
 	return c, nil
 }
 
-// Close ends the browser and everything it started, whatever state it is in: Browser.close
-// first, then the process group (SIGTERM, then SIGKILL), then any leftover process that runs
-// with this profile. It removes the pid file and releases the profile lock. It is idempotent
-// and returns an error only when a process survived.
+// Close requests Browser.close, ends the owned group and reconciles processes running with this
+// profile. Windows also checks the exit signals of admitted exact-owned process generations.
+// It removes the pid file and releases the profile lock, including on failure. It is idempotent
+// and reports surviving processes or an unqualified completion observation.
 func (b *Browser) Close() error {
 	b.closeOnce.Do(func() {
-		b.askToClose()
-		b.closeErr = b.stop()
+		witness := prepareBrowserClose(b, true)
+		b.askToClose(witness.deadline())
+		b.closeErr = b.stopWith(witness)
 	})
 	return b.closeErr
 }
 
 // askToClose sends Browser.close and gives the leader a moment to exit by itself.
-func (b *Browser) askToClose() {
-	ctx, cancel := context.WithTimeout(context.Background(), closeWait)
+func (b *Browser) askToClose(deadline time.Time) {
+	politeDeadline := time.Now().Add(closeWait)
+	if deadline.IsZero() || politeDeadline.Before(deadline) {
+		deadline = politeDeadline
+	}
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
 	c, err := b.connect(ctx)
 	if err == nil {
@@ -307,16 +312,17 @@ func (b *Browser) askToClose() {
 
 // stop is the hard part of Close: it ends the group and every leftover, then lets go.
 func (b *Browser) stop() error {
+	return b.stopWith(prepareBrowserClose(b, false))
+}
+
+func (b *Browser) stopWith(witness closeWitness) error {
 	b.mu.Lock()
 	c := b.conn
 	b.mu.Unlock()
 	if c != nil {
 		c.close() // ends any call still waiting on a browser that stopped answering
 	}
-	if b.worthSignallingGroup() {
-		stopGroup(b.group)
-	}
-	err := sweepArgv(b.profile, true)
+	err := witness.stop(b)
 	b.group.release()
 	_ = os.Remove(pidPath(b.profile))
 	unregister(b)

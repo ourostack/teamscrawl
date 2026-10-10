@@ -4,6 +4,7 @@ package browser
 
 import (
 	"os/exec"
+	"sync"
 	"syscall"
 	"unsafe"
 
@@ -12,7 +13,12 @@ import (
 
 // group is a job object with JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: when the last handle to it
 // closes, even because m365crawl was killed, Windows ends every process in it.
-type group struct{ job windows.Handle }
+type group struct {
+	mu  sync.Mutex
+	job windows.Handle
+}
+
+var completionDuplicateHandle = windows.DuplicateHandle
 
 // prepareCmd starts the child suspended, so it cannot start a process of its own before it is
 // inside the job.
@@ -106,6 +112,11 @@ type jobBasicAccounting struct {
 const jobObjectBasicAccountingInformation = 1
 
 func (g *group) alive() bool {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.job == 0 {
+		return false
+	}
 	var info jobBasicAccounting
 	err := windows.QueryInformationJobObject(g.job, jobObjectBasicAccountingInformation,
 		uintptr(unsafe.Pointer(&info)), uint32(unsafe.Sizeof(info)), nil)
@@ -113,7 +124,34 @@ func (g *group) alive() bool {
 }
 
 // term and kill are the same on Windows: there is no polite signal for a whole job.
-func (g *group) term() { _ = windows.TerminateJobObject(g.job, 1) }
-func (g *group) kill() { _ = windows.TerminateJobObject(g.job, 1) }
+func (g *group) term() { g.kill() }
+func (g *group) kill() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.job != 0 {
+		_ = windows.TerminateJobObject(g.job, 1)
+	}
+}
 
-func (g *group) release() { _ = windows.CloseHandle(g.job) }
+func (g *group) release() {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.job != 0 {
+		_ = windows.CloseHandle(g.job)
+		g.job = 0
+	}
+}
+
+func (g *group) duplicateJob() (windows.Handle, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.job == 0 {
+		return 0, &completionFailure{code: "browser_completion_job_unavailable"}
+	}
+	var duplicate windows.Handle
+	err := completionDuplicateHandle(windows.CurrentProcess(), g.job, windows.CurrentProcess(), &duplicate, 0, false, windows.DUPLICATE_SAME_ACCESS)
+	if err != nil {
+		return 0, &completionFailure{code: "browser_completion_job_duplicate_failed", cause: err}
+	}
+	return duplicate, nil
+}
