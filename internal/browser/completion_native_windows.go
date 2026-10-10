@@ -164,8 +164,8 @@ func terminateCompletionTarget(held windows.Handle, pid uint32, started int64, d
 		return &completionFailure{code: "browser_completion_terminate_open_failed", cause: err}
 	}
 	defer func() {
-		if closeErr := completionCloseHandle(h); closeErr != nil && err == nil {
-			err = &completionFailure{code: "browser_completion_release_failed", cause: closeErr}
+		if closeErr := completionCloseHandle(h); closeErr != nil {
+			err = completionFirst(err, &completionFailure{code: "browser_completion_release_failed", cause: closeErr})
 		}
 	}()
 	if err := completionWithin(deadline); err != nil {
@@ -191,10 +191,21 @@ func terminateCompletionTarget(held windows.Handle, pid uint32, started int64, d
 		if late := completionWithin(deadline); late != nil {
 			return completionFirst(&completionFailure{code: "browser_completion_terminate_failed", cause: err}, late)
 		}
-		if done, waitErr := pollCompletionHandle(held); waitErr == nil && done {
+		done, waitErr := pollCompletionHandle(held)
+		failure := &completionFailure{code: "browser_completion_terminate_failed", cause: err}
+		if late := completionWithin(deadline); late != nil {
+			return completionFirst(failure, late)
+		}
+		if waitErr != nil {
+			return completionFirst(failure, waitErr)
+		}
+		if done {
 			return nil
 		}
-		return &completionFailure{code: "browser_completion_terminate_failed", cause: err}
+		if errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+			return &completionDeniedFailure{cause: err}
+		}
+		return failure
 	}
 	return completionWithin(deadline)
 }

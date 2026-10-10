@@ -45,9 +45,7 @@ func (b *Browser) prepareClose(polite bool) closeWitness {
 func (w *windowsCloseWitness) deadline() time.Time { return w.set.deadline }
 
 func (w *windowsCloseWitness) remember(err error) {
-	if w.firstErr == nil {
-		w.firstErr = err
-	}
+	w.firstErr = completionFirst(w.firstErr, err)
 }
 
 func (w *windowsCloseWitness) stop(*Browser) (err error) {
@@ -72,7 +70,7 @@ func (w *windowsCloseWitness) stop(*Browser) (err error) {
 		}
 	}
 	w.remember(discoverCompletionTargets(w))
-	w.remember(w.set.terminateFallback())
+	_ = w.set.terminateFallback()
 	waitErr := waitCompletion(w.set.deadline, func() (bool, error) {
 		done, pollErr := w.set.poll()
 		if pollErr != nil {
@@ -91,6 +89,7 @@ func (w *windowsCloseWitness) stop(*Browser) (err error) {
 		}
 		return done && info.ActiveProcesses == 0, nil
 	})
+	w.remember(w.set.terminationFailure(true))
 	w.remember(waitErr)
 	if waitErr != nil {
 		return w.firstErr
@@ -101,6 +100,7 @@ func (w *windowsCloseWitness) stop(*Browser) (err error) {
 	if !done && pollErr == nil {
 		w.remember(&completionFailure{code: "browser_completion_late_process"})
 		w.remember(w.set.terminateFallback())
+		w.remember(w.set.terminationFailure(true))
 	}
 	return w.firstErr
 }

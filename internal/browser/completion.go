@@ -34,17 +34,34 @@ func completionBufferFits(capacity, returned, header, offset, length uint32) boo
 func (e *completionFailure) Error() string { return e.code }
 func (e *completionFailure) Unwrap() error { return e.cause }
 
+type completionDeniedFailure struct{ cause error }
+
+func (e *completionDeniedFailure) Error() string { return "browser_completion_terminate_failed" }
+func (e *completionDeniedFailure) Unwrap() error { return e.cause }
+
+func (s *completionSet) terminationFailure(includePending bool) error {
+	var first error
+	for _, target := range s.targets {
+		if includePending || !target.deniedPending {
+			first = completionFirst(first, target.terminationErr)
+		}
+	}
+	return first
+}
+
 type completionIdentity struct {
 	pid     uint32
 	started int64
 }
 
 type completionTarget struct {
-	identity  completionIdentity
-	inJob     bool
-	poll      func() (bool, error)
-	terminate func() error
-	release   func() error
+	identity       completionIdentity
+	inJob          bool
+	poll           func() (bool, error)
+	terminate      func() error
+	release        func() error
+	terminationErr error
+	deniedPending  bool
 }
 
 type completionSet struct {
@@ -96,6 +113,12 @@ func (s *completionSet) poll() (bool, error) {
 		if err != nil {
 			return false, &completionFailure{code: "browser_completion_wait_failed", cause: err}
 		}
+		if err := completionWithin(s.deadline); err != nil {
+			return false, err
+		}
+		if signalled && t.deniedPending {
+			t.terminationErr, t.deniedPending = nil, false
+		}
 		done = done && signalled
 	}
 	if err := completionWithin(s.deadline); err != nil {
@@ -107,7 +130,7 @@ func (s *completionSet) poll() (bool, error) {
 func (s *completionSet) terminateFallback() error {
 	var first error
 	for _, t := range s.targets {
-		if t.inJob {
+		if t.inJob || t.terminationErr != nil {
 			continue
 		}
 		if err := completionWithin(s.deadline); err != nil {
@@ -116,9 +139,7 @@ func (s *completionSet) terminateFallback() error {
 		}
 		signalled, err := t.poll()
 		if err != nil {
-			if first == nil {
-				first = &completionFailure{code: "browser_completion_wait_failed", cause: err}
-			}
+			t.terminationErr = &completionFailure{code: "browser_completion_wait_failed", cause: err}
 			continue
 		}
 		if signalled {
@@ -128,11 +149,12 @@ func (s *completionSet) terminateFallback() error {
 			first = completionFirst(first, err)
 			break
 		}
-		if err := t.terminate(); err != nil && first == nil {
-			first = &completionFailure{code: "browser_completion_terminate_failed", cause: err}
+		if err := t.terminate(); err != nil {
+			t.terminationErr = &completionFailure{code: "browser_completion_terminate_failed", cause: err}
+			_, t.deniedPending = err.(*completionDeniedFailure) //nolint:errorlint // A wrapped denial includes an independent failure and must never become clearable.
 		}
 	}
-	return first
+	return completionFirst(s.terminationFailure(false), first)
 }
 
 func (s *completionSet) release() error {
