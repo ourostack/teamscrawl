@@ -83,6 +83,7 @@ func TestCompletionProductionWitnessChecksDeadlineBeforeAccounting(t *testing.T)
 	f.afterKill = func() { f.jobPids = nil }
 	f.onPoll = func(pid uint32) { enteredPoll = true; f.signalled[pid] = true }
 	before, deadline := time.Now(), f.w.set.deadline
+	// Only the native pre-accounting guard expires; core polling keeps its real, funded deadline.
 	completionWindowsNow = func() time.Time {
 		if enteredPoll {
 			return deadline
@@ -98,7 +99,9 @@ func TestCompletionProductionWitnessChecksDeadlineBeforeAccounting(t *testing.T)
 		return query(h, c, p, n, r)
 	}
 	err := f.w.stop(nil)
-	if err == nil || accounting != 0 || f.closed[42] != 1 || f.closed[7] != 1 {
+	if err == nil || err.Error() != "browser_completion_wait_failed" || errors.Unwrap(err) == nil ||
+		errors.Unwrap(err).Error() != "browser_completion_timeout" || !enteredPoll || accounting != 0 ||
+		f.opened[42] != 1 || f.closed[42] != 1 || f.closed[7] != 1 || f.snapshots != 2 || f.closed[99] != 2 {
 		t.Fatalf("late accounting work or leaked lifetime: err=%v accounting=%d closed=%v", err, accounting, f.closed)
 	}
 }

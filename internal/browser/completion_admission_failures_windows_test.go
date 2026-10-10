@@ -99,6 +99,7 @@ func TestCompletionNativeDiscoveryFailureBoundaries(t *testing.T) {
 			if tc.name == "late-job-list" || tc.name == "late-first-entry" {
 				f.w.set.deadline = time.Now().Add(20 * time.Millisecond)
 			}
+
 			deadline := f.w.set.deadline
 			cause := errors.New("private snapshot operation")
 			consume := func() { time.Sleep(time.Until(deadline) + time.Millisecond) }
@@ -137,5 +138,22 @@ func TestCompletionNativeDiscoveryFailureBoundaries(t *testing.T) {
 				t.Fatal("native discovery cause was lost")
 			}
 		})
+	}
+}
+
+func TestCompletionNativeDiscoveryNextFailureRetainsAdmittedTarget(t *testing.T) {
+	f := newCompletionNativeFixture(t)
+	f.w.set.deadline = time.Now().Add(time.Minute)
+	f.snapshotPids = []uint32{42}
+	f.owned[42] = true
+	cause := errors.New("private next-entry error")
+	completionProcessNext = func(windows.Handle, *windows.ProcessEntry32) error { return cause }
+	err := discoverCompletionTargets(f.w)
+	if err == nil || err.Error() != "browser_completion_snapshot_failed" || !errors.Is(err, cause) ||
+		len(f.w.set.targets) != 1 || f.w.set.targets[0].identity.pid != 42 || f.opened[42] != 1 || f.closed[42] != 0 || f.closed[99] != 1 {
+		t.Fatalf("partial enumeration must retain exact admitted generation and close snapshot: err=%v opened=%v closed=%v", err, f.opened, f.closed)
+	}
+	if err := f.w.set.release(); err != nil || f.closed[42] != 1 {
+		t.Fatalf("retained generation must dispose exactly once: %v closed=%v", err, f.closed)
 	}
 }
