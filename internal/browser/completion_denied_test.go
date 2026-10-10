@@ -163,3 +163,40 @@ func TestCompletionEmptyExpiredSetCannotCertifyCompletion(t *testing.T) {
 		t.Fatalf("empty set after exhaustion must not certify a barrier: done=%v err=%v", done, err)
 	}
 }
+
+func TestCompletionDeniedPollFailureRemainsIrreversibleAfterLaterSignal(t *testing.T) {
+	s := completionTestSet(1)
+	denial, failedPoll := errors.New("synthetic denial"), errors.New("synthetic held failure")
+	phase := 0
+	if err := s.add(&completionTarget{
+		identity: completionIdentity{pid: 42, started: 142},
+		poll: func() (bool, error) {
+			switch phase {
+			case 1:
+				return false, failedPoll
+			case 2:
+				return true, nil
+			default:
+				return false, nil
+			}
+		},
+		terminate: func() error { return &completionDeniedFailure{cause: denial} },
+		release:   func() error { return nil },
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.terminateFallback()
+	phase = 1
+	if done, err := s.poll(); done || !errors.Is(err, failedPoll) {
+		t.Fatalf("failed held observation was hidden: %v %v", done, err)
+	}
+	phase = 2
+	if done, err := s.poll(); !done || err != nil {
+		t.Fatalf("later held signal should still be observed: %v %v", done, err)
+	}
+	if err := s.terminationFailure(true); err == nil || err.Error() != "browser_completion_terminate_failed" ||
+		!errors.Is(err, denial) || !errors.Is(err, failedPoll) {
+		t.Fatalf("later signal erased irreversible combined outcome: %v", err)
+	}
+	_ = s.release()
+}

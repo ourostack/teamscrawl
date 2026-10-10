@@ -111,7 +111,12 @@ func (s *completionSet) poll() (bool, error) {
 		}
 		signalled, err := t.poll()
 		if err != nil {
-			return false, &completionFailure{code: "browser_completion_wait_failed", cause: err}
+			failure := &completionFailure{code: "browser_completion_wait_failed", cause: err}
+			if t.deniedPending {
+				t.terminationErr = completionFirst(t.terminationErr, failure)
+				t.deniedPending = false
+			}
+			return false, failure
 		}
 		if err := completionWithin(s.deadline); err != nil {
 			return false, err
