@@ -166,7 +166,12 @@ func TestFakeHelpers(t *testing.T) {
 
 func TestWriteFailureEndsConnection(t *testing.T) {
 	s := NewServer(t)
-	s.Handle("X.drop", func(Request) (any, *Error) { s.DropConnections(); return map[string]any{}, nil })
+	dropped := make(chan struct{})
+	s.Handle("X.drop", func(Request) (any, *Error) {
+		s.DropConnections()
+		close(dropped)
+		return map[string]any{}, nil
+	})
 	c := dial(t, s)
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -175,6 +180,27 @@ func TestWriteFailureEndsConnection(t *testing.T) {
 	}
 	if _, _, err := c.Read(ctx); err == nil {
 		t.Fatal("the connection was dropped")
+	}
+	select {
+	case <-dropped:
+	case <-ctx.Done():
+		t.Fatal("drop handler did not finish closing the connection")
+	}
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		s.mu.Lock()
+		remaining := len(s.conns)
+		s.mu.Unlock()
+		// Removal follows the failed response write, not merely the client observing closure.
+		if remaining == 0 {
+			break
+		}
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			t.Fatal("failed response write did not release the server connection")
+		}
 	}
 }
 
