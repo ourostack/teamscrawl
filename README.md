@@ -50,8 +50,10 @@ m365crawl is built around the maintainer's own Microsoft 365 usage: support grow
 | People and meetings | Connect identities across sources and read fuller attendee lists | Identity ambiguity, source coverage and platform-specific mappings |
 | Office and OneDrive | Join recent documents, sharing activity and library metadata to people and conversations | Changing cache layouts, link resolution and Windows data sources; metadata is not document text |
 | OneNote | Search locally indexed page text alongside chats and mail | Freshness, page links and Windows data sources; an index is not a complete notebook export |
-| Copilot and Loop | Expose citations in archived bot replies and readable cached Loop content | Private Copilot history and broader Loop coverage require live browser probes |
-| Browser-backed content | Read cloud document text, Stream transcripts, SharePoint pages and News, and used Planner/To Do and Engage surfaces | A tested read path for each service; transcript fetching does not prove another service works |
+| Archived bot citations and Loop | Expose citations in archived bot replies and version-qualified cached Loop content | Preserve Teams provenance, snapshot versions and partial coverage; this is not private Copilot history |
+| Browser-backed content | Read cloud document text, Stream transcripts, SharePoint pages and News, and used Engage surfaces | A tested read path and archive integration for each service; transcript fetching does not prove another service works |
+
+**Not included in the current expansion:** assigned Planner/To Do tasks and private Copilot history. Our probes have not established a representative, account-qualified read contract for those sources. Recap action items are not assigned tasks, and Teams bot citations are not private Copilot history. Parsing OneDrive's local sync-cache database is backend groundwork only: coherent capture while OneDrive is changing that database is not yet qualified. This limitation concerns OneDrive's cache, not m365crawl's existing `sync` command.
 
 Lists can follow a working SharePoint reader when there is data and a concrete use. Forms, Whiteboard, Viva Insights and separate Bookings support are deferred: they are not part of the current implementation commitment. Security and identity apps are outside the work-content scope. These are priorities, not declarations that those products can never be supported.
 
