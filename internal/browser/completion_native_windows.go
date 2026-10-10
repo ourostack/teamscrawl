@@ -27,11 +27,13 @@ var (
 	completionQueryJob         = func(job windows.Handle, class int32, ptr unsafe.Pointer, size uint32, returned *uint32) error {
 		return windows.QueryInformationJobObject(job, class, uintptr(ptr), size, returned) //nolint:gosec // G103: caller retains the typed native buffer through this synchronous query
 	}
-	completionProcessStart = completionCreationTime
-	completionMembership   = completionInJob
-	completionReadArgs     = readProcArgsHandle
-	completionQueryProcess = windows.NtQueryInformationProcess
-	completionIsInJobProc  = windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob")
+	completionProcessStart    = completionCreationTime
+	completionGetProcessTimes = windows.GetProcessTimes
+	completionMembership      = completionInJob
+	completionReadArgs        = readProcArgsHandle
+	completionLongPath        = longPath
+	completionQueryProcess    = windows.NtQueryInformationProcess
+	completionIsInJobProc     = windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob")
 )
 
 type completionJobPIDList struct {
@@ -63,7 +65,7 @@ func jobPIDs(job windows.Handle, limit int) ([]uint32, error) {
 
 func completionCreationTime(h windows.Handle) (int64, error) {
 	var created, exited, kernel, user windows.Filetime
-	if err := windows.GetProcessTimes(h, &created, &exited, &kernel, &user); err != nil {
+	if err := completionGetProcessTimes(h, &created, &exited, &kernel, &user); err != nil {
 		return 0, err
 	}
 	if created.LowDateTime == 0 && created.HighDateTime == 0 {
@@ -267,7 +269,7 @@ func ownedCompletionArgs(argv []string, profile string, deadline time.Time) (boo
 		if !ok {
 			continue
 		}
-		path = longPath(path)
+		path = completionLongPath(path)
 		if err := completionWithin(deadline); err != nil {
 			return false, err
 		}

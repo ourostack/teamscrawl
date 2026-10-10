@@ -18,6 +18,8 @@ type group struct {
 	job windows.Handle
 }
 
+var completionDuplicateHandle = windows.DuplicateHandle
+
 // prepareCmd starts the child suspended, so it cannot start a process of its own before it is
 // inside the job.
 func prepareCmd(cmd *exec.Cmd) {
@@ -147,7 +149,7 @@ func (g *group) duplicateJob() (windows.Handle, error) {
 		return 0, &completionFailure{code: "browser_completion_job_unavailable"}
 	}
 	var duplicate windows.Handle
-	err := windows.DuplicateHandle(windows.CurrentProcess(), g.job, windows.CurrentProcess(), &duplicate, 0, false, windows.DUPLICATE_SAME_ACCESS)
+	err := completionDuplicateHandle(windows.CurrentProcess(), g.job, windows.CurrentProcess(), &duplicate, 0, false, windows.DUPLICATE_SAME_ACCESS)
 	if err != nil {
 		return 0, &completionFailure{code: "browser_completion_job_duplicate_failed", cause: err}
 	}

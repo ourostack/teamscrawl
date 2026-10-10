@@ -12,6 +12,7 @@ import (
 )
 
 var (
+	completionWindowsNow   = time.Now
 	completionSnapshot     = windows.CreateToolhelp32Snapshot
 	completionProcessFirst = windows.Process32First
 	completionProcessNext  = windows.Process32Next
@@ -30,8 +31,8 @@ func (b *Browser) prepareClose(polite bool) closeWitness {
 	if polite {
 		budget += closeWait
 	}
-	w := &windowsCloseWitness{set: &completionSet{deadline: time.Now().Add(budget), limit: completionMaxTargets}}
-	w.profile = longPath(b.profile)
+	w := &windowsCloseWitness{set: &completionSet{deadline: completionWindowsNow().Add(budget), limit: completionMaxTargets}}
+	w.profile = completionLongPath(b.profile)
 	if err := completionWithin(w.set.deadline); err != nil {
 		w.firstErr = err
 		return w
@@ -61,7 +62,7 @@ func (w *windowsCloseWitness) stop(*Browser) (err error) {
 		err = w.firstErr
 	}()
 	w.remember(discoverCompletionTargets(w))
-	if !time.Now().Before(w.set.deadline) {
+	if !completionWindowsNow().Before(w.set.deadline) {
 		w.remember(&completionFailure{code: "browser_completion_timeout"})
 		return w.firstErr
 	}
@@ -80,7 +81,7 @@ func (w *windowsCloseWitness) stop(*Browser) (err error) {
 		if w.job == 0 {
 			return false, &completionFailure{code: "browser_completion_job_unavailable"}
 		}
-		if !time.Now().Before(w.set.deadline) {
+		if !completionWindowsNow().Before(w.set.deadline) {
 			return false, &completionFailure{code: "browser_completion_timeout"}
 		}
 		var info jobBasicAccounting
@@ -105,7 +106,7 @@ func (w *windowsCloseWitness) stop(*Browser) (err error) {
 }
 
 func discoverCompletionTargets(w *windowsCloseWitness) (err error) {
-	if !time.Now().Before(w.set.deadline) {
+	if !completionWindowsNow().Before(w.set.deadline) {
 		return &completionFailure{code: "browser_completion_timeout"}
 	}
 	if w.job != 0 {
@@ -114,7 +115,7 @@ func discoverCompletionTargets(w *windowsCloseWitness) (err error) {
 			err = queryErr
 		} else {
 			for _, pid := range pids {
-				if !time.Now().Before(w.set.deadline) {
+				if !completionWindowsNow().Before(w.set.deadline) {
 					return completionFirst(err, &completionFailure{code: "browser_completion_timeout"})
 				}
 				target, openErr := openCompletionTarget(pid, w.job, w.profile, true, w.set.deadline)
@@ -125,7 +126,7 @@ func discoverCompletionTargets(w *windowsCloseWitness) (err error) {
 			}
 		}
 	}
-	if !time.Now().Before(w.set.deadline) {
+	if !completionWindowsNow().Before(w.set.deadline) {
 		return completionFirst(err, &completionFailure{code: "browser_completion_timeout"})
 	}
 	snap, snapErr := completionSnapshot(windows.TH32CS_SNAPPROCESS, 0)
@@ -146,7 +147,7 @@ func discoverCompletionTargets(w *windowsCloseWitness) (err error) {
 		if scanned >= completionMaxScan {
 			return completionFirst(err, &completionFailure{code: "browser_completion_too_large"})
 		}
-		if !time.Now().Before(w.set.deadline) {
+		if !completionWindowsNow().Before(w.set.deadline) {
 			return completionFirst(err, &completionFailure{code: "browser_completion_timeout"})
 		}
 		if entry.ProcessID != uint32(os.Getpid()) { //nolint:gosec // Windows native process ID fits DWORD
